@@ -101,7 +101,8 @@ public:
 		ProjectionMercator,		//!< Mercator projection
 		ProjectionMiller,		//!< Miller cylindrical projection
 		ProjectionCylinder,		//!< Cylinder projection
-		ProjectionCylinderFill		//!< Cylinder projection, no zoom or movement allowed
+		ProjectionCylinderFill,		//!< Cylinder projection, no zoom or movement allowed
+		ProjectionMollweide		//!< Mollweide projection
 	};
 	Q_ENUM(ProjectionType)
 

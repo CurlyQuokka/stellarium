@@ -422,6 +422,9 @@ StelProjectorP StelCore::getProjection(StelProjector::ModelViewTranformP modelVi
 		case ProjectionMiller:
 			prj = StelProjectorP(new StelProjectorMiller(modelViewTransform));
 			break;
+		case ProjectionMollweide:
+			prj = StelProjectorP(new StelProjectorMollweide(modelViewTransform));
+			break;
 		default:
 			qWarning() << "Unknown projection type: " << static_cast<int>(projType) << "using ProjectionStereographic instead";
 			prj = StelProjectorP(new StelProjectorStereographic(modelViewTransform));

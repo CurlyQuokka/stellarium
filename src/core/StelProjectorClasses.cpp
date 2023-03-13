@@ -1081,3 +1081,93 @@ void StelProjector2d::setBackwardTransformUniforms(QOpenGLShaderProgram& program
 {
 	Q_ASSERT(0);
 }
+
+
+QString StelProjectorMollweide::getNameI18() const
+{
+	return q_("Mollweide");
+}
+
+QString StelProjectorMollweide::getDescriptionI18() const
+{
+	return q_("The Mollweide projection is an equal-area map projection");
+}
+
+bool StelProjectorMollweide::forward(Vec3f &v) const
+{
+	// Hammer Aitoff
+	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+	const float alpha = std::atan2(v[0],-v[2]);
+	const float cosDelta = std::sqrt(1.f-v[1]*v[1]/(r*r));
+	float z = std::sqrt(1.f+cosDelta*cosf(alpha/2.f));
+	v[0] = 2.f*static_cast<float>(M_SQRT2)*cosDelta*std::sin(alpha*0.5f)/z * static_cast<float>(widthStretch);
+	v[1] = static_cast<float>(M_SQRT2)*v[1]/r/z;
+	v[2] = r;
+	return true;
+}
+
+bool StelProjectorMollweide::backward(Vec3d &v) const
+{
+	v[0] /= widthStretch;
+	const double zsq = 1.-0.25*0.25*v[0]*v[0]-0.5*0.5*v[1]*v[1];
+	const double z = zsq<0. ? 0. : std::sqrt(zsq);
+	const bool ret = 0.25*v[0]*v[0]+v[1]*v[1]<2.0; // This is stolen from glunatic
+	const double alpha = 2.*std::atan2(z*v[0],(2.*(2.*zsq-1.)));
+	const double delta = std::asin(v[1]*z);
+	const double cd = std::cos(delta);
+	v[2] = - cd * std::cos(alpha);
+	v[0] = cd * std::sin(alpha);
+	v[1] = v[1]*z;
+	return ret;
+}
+
+QByteArray StelProjectorMollweide::getForwardTransformShader() const
+{
+	return modelViewTransform->getForwardTransformShader() + R"(
+#line 1 102
+uniform float PROJECTOR_FWD_widthStretch;
+vec3 projectorForwardTransform(vec3 v)
+{
+	const float M_SQRT2 = 1.41421356;
+	float widthStretch = PROJECTOR_FWD_widthStretch;
+
+	// Hammer Aitoff
+	float r = length(v);
+	float alpha = atan(v[0],-v[2]);
+	float cosDelta = sqrt(1.-v[1]*v[1]/(r*r));
+	float z = sqrt(1.+cosDelta*cos(alpha/2.));
+	v[0] = 2.*M_SQRT2*cosDelta*sin(alpha/2.)/z * widthStretch;
+	v[1] = M_SQRT2*v[1]/r/z;
+	v[2] = r;
+
+	return v;
+}
+#line 1 0
+)";
+}
+
+QByteArray StelProjectorMollweide::getBackwardTransformShader() const
+{
+	return modelViewTransform->getBackwardTransformShader() + R"(
+#line 1 103
+uniform float PROJECTOR_FWD_widthStretch;
+vec3 projectorBackwardTransform(vec3 v, out bool ok)
+{
+	float widthStretch = PROJECTOR_FWD_widthStretch;
+
+	v[0] /= widthStretch;
+	float zsq = 1.-0.25*0.25*v[0]*v[0]-0.5*0.5*v[1]*v[1];
+	float z = zsq<0. ? 0. : sqrt(zsq);
+	ok = 0.25*v[0]*v[0]+v[1]*v[1]<2.0; // This is stolen from glunatic
+	float alpha = 2.*atan(z*v[0],(2.*(2.*zsq-1.)));
+	float delta = asin(v[1]*z);
+	float cd = cos(delta);
+	v[2] = - cd * cos(alpha);
+	v[0] = cd * sin(alpha);
+	v[1] = v[1]*z;
+
+	return v;
+}
+#line 1 0
+)";
+}

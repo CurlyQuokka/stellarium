@@ -1424,6 +1424,7 @@ void SkyLine::draw(StelCore *core) const
 				case StelCore::ProjectionMercator:
 				case StelCore::ProjectionMiller:
 				case StelCore::ProjectionCylinder:
+				case StelCore::ProjectionMollweide:
 					StelUtils::spheToRect(az, qMin(M_PI_2, alt+M_PI_2)-0.05*M_PI_180, p1);
 					StelUtils::spheToRect(az, qMax(-M_PI_2, alt-M_PI_2)+0.05*M_PI_180, p2);
 					break;
