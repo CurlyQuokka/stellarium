@@ -1095,29 +1095,36 @@ QString StelProjectorMollweide::getDescriptionI18() const
 
 bool StelProjectorMollweide::forward(Vec3f &v) const
 {
-	// Hammer Aitoff
+	// Mollweide
 	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-	const float alpha = std::atan2(v[0],-v[2]);
-	const float cosDelta = std::sqrt(1.f-v[1]*v[1]/(r*r));
-	float z = std::sqrt(1.f+cosDelta*cosf(alpha/2.f));
-	v[0] = 2.f*static_cast<float>(M_SQRT2)*cosDelta*std::sin(alpha*0.5f)/z * static_cast<float>(widthStretch);
-	v[1] = static_cast<float>(M_SQRT2)*v[1]/r/z;
+	const float lambda = std::atan2(v[0],-v[2]);
+	const float gamma = 1.f-v[1]*v[1]/(r*r);
+	float teta = 1.f; // newton's method required
+	float x = r * ((2.f * M_SQRT2) / M_PI) * lambda * std::cos(teta);
+	float y = r * M_SQRT2 * std::sin(teta);
+
+	v[0] = x  * widthStretch;
+	v[1] = y;
 	v[2] = r;
 	return true;
 }
 
 bool StelProjectorMollweide::backward(Vec3d &v) const
 {
-	v[0] /= widthStretch;
-	const double zsq = 1.-0.25*0.25*v[0]*v[0]-0.5*0.5*v[1]*v[1];
-	const double z = zsq<0. ? 0. : std::sqrt(zsq);
+	v[0] /= widthStretch; // x
+
+	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+
+	const float teta = std::asin(v[1] / (r * M_SQRT2));
+
+	const float gamma = std::asin(((2.f * teta) + std::sin(2.f * teta)) / M_PI);
+	const float lambda = (M_PI * v[0]) / (2.f * r * M_SQRT2 * std::cos(teta));
+
 	const bool ret = 0.25*v[0]*v[0]+v[1]*v[1]<2.0; // This is stolen from glunatic
-	const double alpha = 2.*std::atan2(z*v[0],(2.*(2.*zsq-1.)));
-	const double delta = std::asin(v[1]*z);
-	const double cd = std::cos(delta);
-	v[2] = - cd * std::cos(alpha);
-	v[0] = cd * std::sin(alpha);
-	v[1] = v[1]*z;
+
+	v[0] = lambda;
+	v[1] = gamma;
+	v[2] = -lambda;
 	return ret;
 }
 
@@ -1129,15 +1136,19 @@ uniform float PROJECTOR_FWD_widthStretch;
 vec3 projectorForwardTransform(vec3 v)
 {
 	const float M_SQRT2 = 1.41421356;
+	const float M_PI = 3.14159265;
 	float widthStretch = PROJECTOR_FWD_widthStretch;
 
-	// Hammer Aitoff
+	// Mollweide
 	float r = length(v);
-	float alpha = atan(v[0],-v[2]);
-	float cosDelta = sqrt(1.-v[1]*v[1]/(r*r));
-	float z = sqrt(1.+cosDelta*cos(alpha/2.));
-	v[0] = 2.*M_SQRT2*cosDelta*sin(alpha/2.)/z * widthStretch;
-	v[1] = M_SQRT2*v[1]/r/z;
+	const float delta = std::atan2(v[0],-v[2]);
+	const float gamma = 1.f-v[1]*v[1]/(r*r);
+	float teta = 1.f; // newton's method required
+	float x = r * ((2.f * M_SQRT2) / M_PI) * delta * std::cos(teta);
+	float y = r * M_SQRT2 * std::sin(teta);
+
+	v[0] = x  * widthStretch;
+	v[1] = y;
 	v[2] = r;
 
 	return v;
@@ -1153,18 +1164,24 @@ QByteArray StelProjectorMollweide::getBackwardTransformShader() const
 uniform float PROJECTOR_FWD_widthStretch;
 vec3 projectorBackwardTransform(vec3 v, out bool ok)
 {
+	const float M_SQRT2 = 1.41421356;
+	const float M_PI = 3.14159265;
 	float widthStretch = PROJECTOR_FWD_widthStretch;
 
-	v[0] /= widthStretch;
-	float zsq = 1.-0.25*0.25*v[0]*v[0]-0.5*0.5*v[1]*v[1];
-	float z = zsq<0. ? 0. : sqrt(zsq);
-	ok = 0.25*v[0]*v[0]+v[1]*v[1]<2.0; // This is stolen from glunatic
-	float alpha = 2.*atan(z*v[0],(2.*(2.*zsq-1.)));
-	float delta = asin(v[1]*z);
-	float cd = cos(delta);
-	v[2] = - cd * cos(alpha);
-	v[0] = cd * sin(alpha);
-	v[1] = v[1]*z;
+	v[0] /= widthStretch; // x
+
+	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+
+	const float teta = std::asin(v[1] / (r * M_SQRT2));
+
+	const float gamma = std::asin(((2.f * teta) + std::sin(2.f * teta)) / M_PI);
+	const float lambda = (M_PI * v[0]) / (2.f * r * M_SQRT2 * std::cos(teta));
+
+	const bool ret = 0.25*v[0]*v[0]+v[1]*v[1]<2.0; // This is stolen from glunatic
+
+	v[0] = lambda;
+	v[1] = gamma;
+	v[2] = -lambda;
 
 	return v;
 }
