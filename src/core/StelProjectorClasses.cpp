@@ -1090,41 +1090,70 @@ QString StelProjectorMollweide::getNameI18() const
 
 QString StelProjectorMollweide::getDescriptionI18() const
 {
-	return q_("The Mollweide projection is an equal-area map projection");
+	return q_("The Mollweide projection is an equal-area map projection created by German mathematician and astronomer Karl Mollweide in 1805");
 }
 
 bool StelProjectorMollweide::forward(Vec3f &v) const
 {
-	// Mollweide
-	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-	const float lambda = std::atan2(v[0],-v[2]);
-	const float gamma = 1.f-v[1]*v[1]/(r*r);
-	float teta = 1.f; // newton's method required
-	float x = r * ((2.f * M_SQRT2) / M_PI) * lambda * std::cos(teta);
-	float y = r * M_SQRT2 * std::sin(teta);
 
-	v[0] = x  * widthStretch;
+//	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+//	const bool rval = (-r < v[1] && v[1] < r);
+//	const float alpha = std::atan2(v[0],-v[2]);
+
+	// Mollweide
+//	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+
+	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+	const bool rval = (-r < v[1] && v[1] < r);
+
+	const float lon = std::atan2(v[0],-v[2]);
+	const float lat = std::asin(v[1]/r);
+//	const float lat = 1.f-v[1]*v[1];
+	float teta = this->calculateTeta(lat, 0.05);
+	const float x = ((2.f * M_SQRT2) / M_PI) * lon * std::cos(teta);
+	const float y = M_SQRT2 * std::sin(teta);
+
+	v[0] = x;
 	v[1] = y;
-	v[2] = r;
-	return true;
+	v[2] = rval;
+
+	Q_ASSERT(!std::isnan(v[0]));
+	Q_ASSERT(!std::isnan(v[1]));
+	Q_ASSERT(!std::isnan(v[2]));
+
+	return rval;
 }
 
 bool StelProjectorMollweide::backward(Vec3d &v) const
 {
-	v[0] /= widthStretch; // x
+	//const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 
-	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+	float tmp = v[1] / (M_SQRT2);
 
-	const float teta = std::asin(v[1] / (r * M_SQRT2));
+	if (tmp > 1.f || tmp < -1.f) {
+		tmp -= std::ceil(tmp);
+	}
+//	float tmp2 = tmp - std::ceil(tmp);
+	float teta = std::asin(tmp);
 
-	const float gamma = std::asin(((2.f * teta) + std::sin(2.f * teta)) / M_PI);
-	const float lambda = (M_PI * v[0]) / (2.f * r * M_SQRT2 * std::cos(teta));
+	float sin2t = std::sin(2.f * teta);
+	float lonbasin = (2.f * teta + sin2t) / M_PI;
+
+	float lat = (M_PI * v[0]) / (2.f  * M_SQRT2 * std::cos(teta));
+	const float lon = std::asin(lonbasin);
 
 	const bool ret = 0.25*v[0]*v[0]+v[1]*v[1]<2.0; // This is stolen from glunatic
 
-	v[0] = lambda;
-	v[1] = gamma;
-	v[2] = -lambda;
+	Q_ASSERT(!std::isnan(lon));
+	Q_ASSERT(!std::isnan(lat));
+//	Q_ASSERT(!std::isnan(v[2]));
+
+	v[0] = lon;
+	v[1] = lat;
+	v[2] = -lon;
+
+
+
 	return ret;
 }
 
@@ -1140,16 +1169,25 @@ vec3 projectorForwardTransform(vec3 v)
 	float widthStretch = PROJECTOR_FWD_widthStretch;
 
 	// Mollweide
-	float r = length(v);
-	const float delta = std::atan2(v[0],-v[2]);
-	const float gamma = 1.f-v[1]*v[1]/(r*r);
-	float teta = 1.f; // newton's method required
-	float x = r * ((2.f * M_SQRT2) / M_PI) * delta * std::cos(teta);
-	float y = r * M_SQRT2 * std::sin(teta);
 
-	v[0] = x  * widthStretch;
+
+	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+	const bool rval = (-r < v[1] && v[1] < r);
+
+	const float lon = std::atan2(v[0],-v[2]);
+	const float lat = std::asin(v[1]/r);
+
+	float teta = this->calculateTeta(lat, 0.05);
+	const float x = ((2.f * M_SQRT2) / M_PI) * lon * std::cos(teta);
+	const float y = M_SQRT2 * std::sin(teta);
+
+	v[0] = x;
 	v[1] = y;
-	v[2] = r;
+	v[2] = rval;
+
+	Q_ASSERT(!std::isnan(v[0]));
+	Q_ASSERT(!std::isnan(v[1]));
+	Q_ASSERT(!std::isnan(v[2]));
 
 	return v;
 }
@@ -1167,24 +1205,45 @@ vec3 projectorBackwardTransform(vec3 v, out bool ok)
 	const float M_SQRT2 = 1.41421356;
 	const float M_PI = 3.14159265;
 	float widthStretch = PROJECTOR_FWD_widthStretch;
+	//const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 
-	v[0] /= widthStretch; // x
+	float tmp = v[1] / (M_SQRT2);
 
-	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
+	if (tmp > 1.f || tmp < -1.f) {
+		tmp -= std::ceil(tmp);
+	}
+//	float tmp2 = tmp - std::ceil(tmp);
+	float teta = std::asin(tmp);
 
-	const float teta = std::asin(v[1] / (r * M_SQRT2));
+	float sin2t = std::sin(2.f * teta);
+	float lonbasin = (2.f * teta + sin2t) / M_PI;
 
-	const float gamma = std::asin(((2.f * teta) + std::sin(2.f * teta)) / M_PI);
-	const float lambda = (M_PI * v[0]) / (2.f * r * M_SQRT2 * std::cos(teta));
+	float lat = (M_PI * v[0]) / (2.f  * M_SQRT2 * std::cos(teta));
+	const float lon = std::asin(lonbasin);
 
 	const bool ret = 0.25*v[0]*v[0]+v[1]*v[1]<2.0; // This is stolen from glunatic
 
-	v[0] = lambda;
-	v[1] = gamma;
-	v[2] = -lambda;
+	Q_ASSERT(!std::isnan(lon));
+	Q_ASSERT(!std::isnan(lat));
+//	Q_ASSERT(!std::isnan(v[2]));
 
+	v[0] = lon;
+	v[1] = lat;
+	v[2] = -lon;
 	return v;
 }
 #line 1 0
 )";
+}
+
+float StelProjectorMollweide::calculateTeta(const float lattitude, const float stopErr) const
+{
+	float current = lattitude;
+	float prev;
+	do {
+		prev = current;
+		current = prev - ((2.f * prev + std::sin(2.f*prev) - M_PI * sin(lattitude))/(4 * std::cos(prev) * std::cos(prev)));
+	} while (std::abs(current - prev) > stopErr);
+
+	return current;
 }
