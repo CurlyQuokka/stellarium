@@ -272,7 +272,7 @@ protected:
 		return cap.intersects(cap1) && cap.intersects(cap2) && cap.intersects(cap3);
 	}
 private:
-	float calculateTeta(const float lattitude, const float stopErr) const;
+	float calculateTheta(const float lattitude, const float stopErr) const;
 };
 
 #endif // STELPROJECTIONS_HPP

@@ -1095,66 +1095,53 @@ QString StelProjectorMollweide::getDescriptionI18() const
 
 bool StelProjectorMollweide::forward(Vec3f &v) const
 {
-
-//	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-//	const bool rval = (-r < v[1] && v[1] < r);
-//	const float alpha = std::atan2(v[0],-v[2]);
-
-	// Mollweide
-//	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-
 	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-	const bool rval = (-r < v[1] && v[1] < r);
 
 	const float lon = std::atan2(v[0],-v[2]);
 	const float lat = std::asin(v[1]/r);
-//	const float lat = 1.f-v[1]*v[1];
-	float teta = this->calculateTeta(lat, 0.05);
-	const float x = ((2.f * M_SQRT2) / M_PI) * lon * std::cos(teta);
-	const float y = M_SQRT2 * std::sin(teta);
 
-	v[0] = x;
+	const float theta = this->calculateTheta(lat, 0.005);
+	const float x = ((2.f * static_cast<float>(M_SQRT2)) / static_cast<float>(M_PI)) * lon * std::cos(theta);
+	const float y = static_cast<float>(M_SQRT2) * std::sin(theta);
+
+	v[0] = x * static_cast<float>(widthStretch);
 	v[1] = y;
-	v[2] = rval;
+	v[2] = r;
 
-	Q_ASSERT(!std::isnan(v[0]));
-	Q_ASSERT(!std::isnan(v[1]));
-	Q_ASSERT(!std::isnan(v[2]));
-
-	return rval;
+	return true;
 }
 
 bool StelProjectorMollweide::backward(Vec3d &v) const
 {
-	//const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 
-	float tmp = v[1] / (M_SQRT2);
+	v[0] /= widthStretch;
 
-	if (tmp > 1.f || tmp < -1.f) {
-		tmp -= std::ceil(tmp);
-	}
-//	float tmp2 = tmp - std::ceil(tmp);
-	float teta = std::asin(tmp);
+	float tmp = v[1] / (static_cast<float>(M_SQRT2));
 
-	float sin2t = std::sin(2.f * teta);
-	float lonbasin = (2.f * teta + sin2t) / M_PI;
+	tmp = tmp < -1 || tmp > 1 ? 0 : tmp;
 
-	float lat = (M_PI * v[0]) / (2.f  * M_SQRT2 * std::cos(teta));
-	const float lon = std::asin(lonbasin);
+	const float theta = std::asin(tmp);
 
-	const bool ret = 0.25*v[0]*v[0]+v[1]*v[1]<2.0; // This is stolen from glunatic
+	const float sin2t = std::sin(2.f * theta);
+	float lonbase = (2.f * theta + sin2t) / static_cast<float>(M_PI);
 
-	Q_ASSERT(!std::isnan(lon));
-	Q_ASSERT(!std::isnan(lat));
-//	Q_ASSERT(!std::isnan(v[2]));
+	lonbase = lonbase < -1 || lonbase > 1 ? 0 : lonbase;
 
-	v[0] = lon;
+	const float lon = std::asin(lonbase);
+	const float lat = (static_cast<float>(M_PI) * v[0]) / (2.f  * static_cast<float>(M_SQRT2) * std::cos(theta));
+	const double cd = std::cos(lat);
+	v[0] = cd * std::sin(lon);
 	v[1] = lat;
-	v[2] = -lon;
+	v[2] = - cd * std::cos(lon);
 
+	if (v[1] > 1 || v[1] < -1) {
+		v[0] = 0;
+		v[1] = 0;
+		v[2] = 1;
+		return false;
+	}
 
-
-	return ret;
+	return true;
 }
 
 QByteArray StelProjectorMollweide::getForwardTransformShader() const
@@ -1165,29 +1152,20 @@ uniform float PROJECTOR_FWD_widthStretch;
 vec3 projectorForwardTransform(vec3 v)
 {
 	const float M_SQRT2 = 1.41421356;
-	const float M_PI = 3.14159265;
 	float widthStretch = PROJECTOR_FWD_widthStretch;
 
-	// Mollweide
-
-
 	const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
-	const bool rval = (-r < v[1] && v[1] < r);
 
 	const float lon = std::atan2(v[0],-v[2]);
 	const float lat = std::asin(v[1]/r);
 
-	float teta = this->calculateTeta(lat, 0.05);
-	const float x = ((2.f * M_SQRT2) / M_PI) * lon * std::cos(teta);
-	const float y = M_SQRT2 * std::sin(teta);
+	const float theta = this->calculateTheta(lat, 0.005);
+	const float x = ((2.f * static_cast<float>(M_SQRT2)) / static_cast<float>(M_PI)) * lon * std::cos(theta);
+	const float y = static_cast<float>(M_SQRT2) * std::sin(theta);
 
-	v[0] = x;
+	v[0] = x * static_cast<float>(widthStretch);
 	v[1] = y;
-	v[2] = rval;
-
-	Q_ASSERT(!std::isnan(v[0]));
-	Q_ASSERT(!std::isnan(v[1]));
-	Q_ASSERT(!std::isnan(v[2]));
+	v[2] = r;
 
 	return v;
 }
@@ -1205,44 +1183,47 @@ vec3 projectorBackwardTransform(vec3 v, out bool ok)
 	const float M_SQRT2 = 1.41421356;
 	const float M_PI = 3.14159265;
 	float widthStretch = PROJECTOR_FWD_widthStretch;
-	//const float r = std::sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 
-	float tmp = v[1] / (M_SQRT2);
+	v[0] /= widthStretch;
 
-	if (tmp > 1.f || tmp < -1.f) {
-		tmp -= std::ceil(tmp);
-	}
-//	float tmp2 = tmp - std::ceil(tmp);
-	float teta = std::asin(tmp);
+	float tmp = v[1] / M_SQRT2;
 
-	float sin2t = std::sin(2.f * teta);
-	float lonbasin = (2.f * teta + sin2t) / M_PI;
+	tmp = tmp < -1 || tmp > 1 ? 0 : tmp;
 
-	float lat = (M_PI * v[0]) / (2.f  * M_SQRT2 * std::cos(teta));
-	const float lon = std::asin(lonbasin);
+	const float theta = std::asin(tmp);
 
-	const bool ret = 0.25*v[0]*v[0]+v[1]*v[1]<2.0; // This is stolen from glunatic
+	const float sin2t = std::sin(2.f * theta);
+	float lonbase = (2.f * theta + sin2t) / M_PI;
 
-	Q_ASSERT(!std::isnan(lon));
-	Q_ASSERT(!std::isnan(lat));
-//	Q_ASSERT(!std::isnan(v[2]));
+	lonbase = lonbase < -1 || lonbase > 1 ? 0 : lonbase;
 
-	v[0] = lon;
+	const float lon = std::asin(lonbase);
+	const float lat = (M_PI * v[0]) / (2.f  * M_SQRT2 * std::cos(theta));
+	const double cd = std::cos(lat);
+	v[0] = cd * std::sin(lon);
 	v[1] = lat;
-	v[2] = -lon;
+	v[2] = - cd * std::cos(lon);
+
+	if (v[1] > 1 || v[1] < -1) {
+		v[0] = 0;
+		v[1] = 0;
+		v[2] = 1;
+	}
+
 	return v;
 }
 #line 1 0
 )";
 }
 
-float StelProjectorMollweide::calculateTeta(const float lattitude, const float stopErr) const
+float StelProjectorMollweide::calculateTheta(const float lattitude, const float stopErr) const
 {
 	float current = lattitude;
 	float prev;
 	do {
 		prev = current;
-		current = prev - ((2.f * prev + std::sin(2.f*prev) - M_PI * sin(lattitude))/(4 * std::cos(prev) * std::cos(prev)));
+//		current = prev - ((2.f * prev + std::sin(2.f*prev) - static_cast<float>(M_PI) * sin(lattitude))/(2 + std::cos(2*prev)));
+		current = prev - ((2.f * prev + std::sin(2.f*prev) - static_cast<float>(M_PI) * sin(lattitude))/(4 * std::cos(prev) * std::cos(prev)));
 	} while (std::abs(current - prev) > stopErr);
 
 	return current;
